@@ -1,30 +1,22 @@
 from django.contrib import admin
+from django.forms.widgets import TextInput
 
-from .models import Dataset, Location, Param, Column, Datum, DatumRaw
-
-
-class DatumInline(admin.TabularInline):
-    fields = ('dataset', 'location', 'param', 'x', 'value', 'tags')
-    model = Datum
-    extra = 0
+from .models import Dataset, Location, Param, Column, Datum, DatumRaw, TagsField
 
 
-class DatumRawInline(admin.TabularInline):
-    fields = ('dataset', 'location', 'param', 'x', 'value', 'tags')
-    model = DatumRaw
-    extra = 0
+class TaggedAdmin(admin.ModelAdmin):
+    formfield_overrides = {
+        # TODO: really need a key/value widget of some kind
+        TagsField: {'widget': TextInput},
+    }
 
 
-class DatumInlineAdmin(admin.ModelAdmin):
-    inlines = [DatumInline, DatumRawInline]
-
-
-class DatumAdmin(admin.ModelAdmin):
+class DatumAdmin(TaggedAdmin):
     fields = ('dataset', 'location', 'param', 'x', 'value', 'tags')
 
-admin.site.register(Dataset)
-admin.site.register(Location, DatumInlineAdmin)
-admin.site.register(Param, DatumInlineAdmin)
-admin.site.register(Column)
+admin.site.register(Dataset, TaggedAdmin)
+admin.site.register(Location, TaggedAdmin)
+admin.site.register(Param, TaggedAdmin)
+admin.site.register(Column, TaggedAdmin)
 admin.site.register(Datum, DatumAdmin)
 admin.site.register(DatumRaw, DatumAdmin)

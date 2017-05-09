@@ -1,52 +1,82 @@
 
 import json
 from django.db import models
+from django import forms
+from django.core.exceptions import ValidationError
 
 
-class TaggedModel(models.Model):
+class TagsField(models.TextField):
     """
-    mudata tables all have an arbitrary number of columns, so the non-required
-    (i.e. non-queried) columns are stored as JSON in the 'tags' column. These methods
-    handle key/value setting/getting for extra columns. Extra columns do not have a 
-    meaning for 'missing' values, so None/null/NA/'' values are treated as equivalent.
+    This custom field handles converting data from a dict to a json and back
     """
 
-    def tags_get(self):
-        return json.loads(self.tags)
+    def __init__(self, *args, **kwargs):
+        kwargs['default'] = '{}'
+        kwargs['blank'] = True
+        kwargs['null'] = True
+        super(TagsField, self).__init__(*args, **kwargs)
 
-    def tag_set(self, **kwargs):
-        dct = json.loads(self.tags)
-        for key, value in kwargs.items():
-            if key in dct and ((value is None) or (value == '')):
-                del dct[key]
-            elif value is not None:
-                dct[key] = value
-        self.tags = json.dumps(dct)
-        return dct
-
-    def tag_get(self, tag):
-        tags = json.loads(self.tags)
-        if tag in tags:
-            return tags[tag]
+    def from_db_value(self, value, expression, connection, context):
+        if value is None:
+            return {}
         else:
-            return None
+            return json.loads(value)
 
-    class Meta:
-        abstract = True
+    def to_python(self, value):
+        if value is None:
+            return {}
+        elif isinstance(value, dict):
+            return value
+        elif isinstance(value, str):
+            try:
+                return json.loads(value)
+            except ValueError as e:
+                raise ValidationError('The value `%(value)s` could not be converted to JSON (%(error)s)',
+                                      params={'value': value, 'error': str(e)}, code='invalid')
+        else:
+            raise ValidationError('Object of type "%(objtype)s" could not be converted to a dict',
+                                  params={'objtype': type(value).__name__}, code='invalid')
+
+    def get_prep_value(self, value):
+        if value is None:
+            return '{}'
+        elif isinstance(value, dict):
+            return json.dumps(value)
+        elif isinstance(value, str):
+            return value
+        else:
+            raise ValidationError('Object of type "%(objtype)s" could not be converted to a dict',
+                                  params={'objtype': type(value).__name__}, code='invalid')
+
+    def deconstruct(self):
+        name, path, args, kwargs = super(TagsField, self).deconstruct()
+        del kwargs['default']
+        del kwargs['blank']
+        del kwargs['null']
+        return name, path, args, kwargs
+
+    def formfield(self, **kwargs):
+        # This is a fairly standard way to set up some defaults
+        # while letting the caller override them.
+        defaults = {'form_class': forms.CharField}
+        if 'max_length' not in kwargs:
+            kwargs['max_length'] = 200
+        defaults.update(kwargs)
+        return super(TagsField, self).formfield(**defaults)
 
 
-class Dataset(TaggedModel):
+class Dataset(models.Model):
     """
     Datasets are a scope where the meaning of location, param, and column are consistent
     """
     dataset = models.SlugField(unique=True)
-    tags = models.TextField(default='{}')
+    tags = TagsField()
 
     def __str__(self):
         return self.dataset
 
 
-class Location(TaggedModel):
+class Location(models.Model):
     """
     Locations are discrete spatial entities (e.g., climate stations) whose identifier
     carries consistent meaning within a dataset. This table stores information about each
@@ -54,7 +84,7 @@ class Location(TaggedModel):
     """
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     location = models.SlugField()
-    tags = models.TextField(default='{}')
+    tags = TagsField()
 
     def __str__(self):
         return ' / '.join(str(x) for x in (self.dataset, self.location))
@@ -63,14 +93,14 @@ class Location(TaggedModel):
         unique_together = ('dataset', 'location',)
 
 
-class Param(TaggedModel):
+class Param(models.Model):
     """
     Params are measured parameters (e.g., temperature). This table stores information
     about each parameter.
     """
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     param = models.SlugField()
-    tags = models.TextField(default='{}')
+    tags = TagsField()
 
     def __str__(self):
         return ' / '.join(str(x) for x in (self.dataset, self.param))
@@ -79,7 +109,7 @@ class Param(TaggedModel):
         unique_together = ('dataset', 'param',)
 
 
-class Column(TaggedModel):
+class Column(models.Model):
     """
     User-defined tags and some required columns (x and value in the 'data' table, in particular)
     need metadata to display and/or parse the data.
@@ -90,7 +120,7 @@ class Column(TaggedModel):
         ('data', 'data'), ('columns', 'columns')
     ))
     column = models.SlugField()
-    tags = models.TextField(default='{}')
+    tags = TagsField()
 
     def __str__(self):
         return ' / '.join(str(x) for x in (self.dataset, self.table, self.column))
@@ -99,7 +129,7 @@ class Column(TaggedModel):
         unique_together = ('dataset', 'table', 'column',)
 
 
-class AbstractDatum(TaggedModel):
+class AbstractDatum(models.Model):
     """
     This table contains the data. Each datum has a dataset, location, param, and an 'x' value.
     """
@@ -107,7 +137,7 @@ class AbstractDatum(TaggedModel):
     location = models.ForeignKey(Location, on_delete=models.CASCADE)
     param = models.ForeignKey(Param, on_delete=models.CASCADE)
     value = models.CharField(max_length=200, blank=True, null=True)
-    tags = models.TextField(default='{}')
+    tags = TagsField()
 
     class Meta:
         abstract = True
