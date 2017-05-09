@@ -1,10 +1,10 @@
 
 import datetime
+import os
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 
 from .models import Dataset, Location, Param, Column, Datum, DatumRaw
-from .datetime_parse import datetime_parse
 
 
 class TagsFieldTests(TestCase):
@@ -163,6 +163,9 @@ class ColumnModelTests(TestCase):
 class DateTimeConversionTests(TestCase):
 
     def test_datetime_autoconvert(self):
+        # import the datetime function
+        from mudata.datetime_parse import datetime_parse
+
         # None should be None
         self.assertIsNone(datetime_parse(None))
 
@@ -247,3 +250,113 @@ class DataModelTests(TestCase):
         # bad tags
         bad_datum = Datum(dataset=ds, location=loc, param=param, x=now(), tags='{notjson]*')
         self.assertRaises(ValidationError, bad_datum.full_clean)
+
+
+class DataRawModelTests(TestCase):
+
+    def test_data_validation(self):
+        # create dataset
+        ds = Dataset(dataset='dataset')
+        ds.save()
+
+        # valid location
+        loc = Location(dataset=ds, location='location')
+        loc.save()
+
+        # valid param
+        param = Param(dataset=ds, param='param')
+        param.save()
+
+        t1 = 'time 1'
+
+        # valid datum (utc to avoid warnings)
+        valid_datum = DatumRaw(dataset=ds, location=loc, param=param, x=t1, value='a value')
+        valid_datum.full_clean()
+        valid_datum.save()
+
+        # blank value should be ok
+        valid_datum_2 = DatumRaw(dataset=ds, location=loc, param=param, x='time 2', value=None)
+        valid_datum_2.full_clean()
+        valid_datum_2.save()
+
+        # duplicate datum
+        dup_datum = DatumRaw(dataset=ds, location=loc, param=param, x=t1, value='another value')
+        self.assertRaises(ValidationError, dup_datum.full_clean)
+
+        # bad dataset
+        bad_datum = DatumRaw(dataset=None, location=loc, param=param, x='time 2')
+        self.assertRaises(ValidationError, bad_datum.full_clean)
+
+        # bad location
+        bad_datum = DatumRaw(dataset=ds, location=None, param=param, x='time 3')
+        self.assertRaises(ValidationError, bad_datum.full_clean)
+
+        # bad param
+        bad_datum = DatumRaw(dataset=ds, location=loc, param=None, x='time 4')
+        self.assertRaises(ValidationError, bad_datum.full_clean)
+
+        # bad x
+        bad_datum = DatumRaw(dataset=ds, location=loc, param=param, x=None)
+        self.assertRaises(ValidationError, bad_datum.full_clean)
+
+        # bad tags
+        bad_datum = DatumRaw(dataset=ds, location=loc, param=param, x='time 5', tags='{notjson]*')
+        self.assertRaises(ValidationError, bad_datum.full_clean)
+
+
+class ImportFunctionTest(TestCase):
+
+    def test_kentville_greenwood_blank_import(self):
+
+        from mudata.io import import_mudata
+
+        # locate kg file
+        kg_zip = os.path.join(os.path.dirname(__file__), 'static', 'mudata', 'kg.mudata.zip')
+        self.assertTrue(os.path.exists(kg_zip))
+
+        # do import
+        import_mudata(kg_zip)
+
+        # check for ecclimate
+        ds = Dataset.objects.get(dataset='ecclimate')
+        self.assertEqual(ds.dataset, 'ecclimate')
+
+        # check for locations
+        locations = set(loc.location for loc in ds.location_set.all())
+        self.assertSetEqual(locations, {'KENTVILLE_CDA_CS', 'GREENWOOD_A'})
+
+        # check for params
+        params = set(param.param for param in ds.param_set.all())
+        self.assertSetEqual(params, {'maxtemp', 'mintemp', 'meantemp', 'heatdegdays', 'cooldegdays',
+                                     'totalrain', 'totalsnow', 'totalprecip', 'snowongrnd', 'dirofmaxgust',
+                                     'spdofmaxgust'})
+
+        # check for columns
+        correct_columns = {'data': ['flags', 'value', 'x'],
+                           'datasets': [],
+                           'locations': ['climateid',
+                                         'dlyfirstyear',
+                                         'dlylastyear',
+                                         'elevation',
+                                         'firstyear',
+                                         'hlyfirstyear',
+                                         'hlylastyear',
+                                         'lastyear',
+                                         'latitude',
+                                         'longitude',
+                                         'mlyfirstyear',
+                                         'mlylastyear',
+                                         'name',
+                                         'province',
+                                         'stationid',
+                                         'tcid',
+                                         'wmoid'],
+                           'params': ['label']}
+
+        for table in ('datasets', 'locations', 'params', 'data'):
+            cols = set(item['column'] for item in ds.column_set.filter(table=table).values('column'))
+            self.assertSetEqual(cols, set(correct_columns[table]))
+
+        # check for data
+        self.assertEqual(len(ds.datum_set.all()), 1364)
+        self.assertEqual(len(ds.datumraw_set.all()), 0)
