@@ -2,8 +2,8 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import Http404
 
-from .datetime_parse import datetime_parse
-from .models import Dataset, Location, Param, Datum, DatumRaw
+from .datetime_parse import datetime_parse_numeric
+from .models import Dataset, Location, Param, Datum
 
 
 def index(request):
@@ -27,31 +27,47 @@ def view_param(request, dataset_slug, param_slug):
     return render(request, 'mudata/view_param.html', {'param': param})
 
 
-def query(request, table, format):
+def query(request, format):
 
     query_params = request.GET
-    # TODO: validate query params
+    # TODO: validate query params (make sure datetime XOR x query is used, not both)
 
     # extract dataset/location/param restrictions
     datasets = query_params['datasets'].split(' ') if 'datasets' in query_params else []
     locations = query_params['locations'].split(' ') if 'locations' in query_params else []
     params = query_params['params'].split(' ') if 'params' in query_params else []
 
-    # extract 'x' query
-    x_from = query_params['x_from'] if 'x_from' in query_params else None
-    x_to = query_params['x_to'] if 'x_to' in query_params else None
+    # extract 'x' query, parse to float
+    try:
+        x_from = float(query_params['x_from']) if 'x_from' in query_params else None
+    except ValueError:
+        raise ValueError("Unparsable x_from: %s" % query_params['x_from'])
+    try:
+        x_to = float(query_params['x_to']) if 'x_to' in query_params else None
+    except ValueError:
+        raise ValueError("Unparsable x_to: %s" % query_params['x_to'])
 
-    # choose object_class and x type based on table name
-    if table == 'data':
-        object_class = Datum
-        x_from = datetime_parse(x_from)
-        x_to = datetime_parse(x_to)
-    elif table == 'raw_data':
-        object_class = DatumRaw
-    else:
-        raise Http404('Table %s does not exist' % table)
+    # extract 'datetime' query
+    datetime_from = query_params['datetime_from'] if 'datetime_from' in query_params else None
+    datetime_to = query_params['datetime_to'] if 'datetime_to' in query_params else None
 
-    query_set = object_class.objects.all()
+    # parse datetime from and to
+    if datetime_from is not None:
+        if x_from is not None:
+            raise RuntimeError("x_from and datetime_from cannot both be passed")
+        try:
+            x_from = datetime_parse_numeric(datetime_from)
+        except ValueError:
+            raise ValueError("Unparsable datetime_from: %s" % datetime_from)
+    if datetime_to is not None:
+        if x_to is not None:
+            raise RuntimeError("x_to and datetime_to cannot both be passed")
+        try:
+            x_to = datetime_parse_numeric(datetime_to)
+        except ValueError:
+            raise ValueError("Unparsable datetime_to: %s" % datetime_to)
+
+    query_set = Datum.objects.all()
     if datasets:
         dataset_ids = []
         for dataset in datasets:

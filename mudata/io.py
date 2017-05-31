@@ -6,8 +6,8 @@ import csv
 import contextlib
 from django.core.exceptions import ObjectDoesNotExist
 
-from .datetime_parse import datetime_parse
-from .models import Dataset, Location, Param, Column, DatumRaw, Datum
+from .datetime_parse import datetime_parse, datetime_numeric
+from .models import Dataset, Location, Param, Column, Datum
 
 
 @contextlib.contextmanager
@@ -215,10 +215,13 @@ def import_mudata(zip_file):
 
                 # parse x value
                 try:
-                    x = datetime_parse(line[3])
-                    datum = Datum(dataset=ds, location=location, param=param, x=x, value=value, tags=line[5])
+                    dt = datetime_parse(line[3])
+                    dt_numeric = datetime_numeric(dt)
+                    datum = Datum(dataset=ds, location=location, param=param, x=dt_numeric,
+                                  datetime=dt, value=value, tags=line[5])
                 except ValueError:
-                    datum = DatumRaw(dataset=ds, location=location, param=param, x=line[3], value=value, tags=line[5])
+                    datum = Datum(dataset=ds, location=location, param=param, x=line[3],
+                                  value=value, tags=line[5])
 
                 # check for existing datum, but this time fail if there is an attempt to add duplicate data
                 # this should fail on full_clean

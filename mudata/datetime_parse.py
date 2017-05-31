@@ -1,6 +1,8 @@
 
 from datetime import datetime
 
+EPOCH = datetime(1970, 1, 1, 0, 0, tzinfo=datetime.utcnow().tzinfo)
+
 
 def datetime_parse(x):
     if x is None:
@@ -14,3 +16,19 @@ def datetime_parse(x):
             pass
 
     raise ValueError('Could not parse x value: %s' % x)
+
+
+def datetime_numeric(dt):
+    return dt.timestamp()
+
+
+def datetime_parse_numeric(x):
+    dt = datetime_parse(x)
+    if dt is None:
+        return None
+    else:
+        return datetime_numeric(dt)
+
+
+def numeric_to_datetime(x):
+    datetime.fromtimestamp(x)

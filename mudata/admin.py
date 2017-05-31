@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.forms.widgets import TextInput
 
-from .models import Dataset, Location, Param, Column, Datum, DatumRaw, TagsField
+from .models import Dataset, Location, Param, Column, Datum, TagsField
 
 
 class TaggedAdmin(admin.ModelAdmin):
@@ -19,4 +19,3 @@ admin.site.register(Location, TaggedAdmin)
 admin.site.register(Param, TaggedAdmin)
 admin.site.register(Column, TaggedAdmin)
 admin.site.register(Datum, DatumAdmin)
-admin.site.register(DatumRaw, DatumAdmin)

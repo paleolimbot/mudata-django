@@ -16,8 +16,8 @@ urlpatterns = [
         views.view_param, name='view_param'),
 
     # the 'query' action
-    url(r'^query/(?P<table>data|raw_data)/(?P<format>html|json)$', views.query, name='query'),
+    url(r'^query/(?P<format>html|json)$', views.query, name='query'),
 
     # the 'plot' action
-    url(r'^plot/(?P<table>data|raw_data)(?P<format>html|json)$', views.plot, name='plot'),
+    url(r'^plot/(?P<format>html|json)$', views.plot, name='plot'),
 ]

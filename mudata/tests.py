@@ -4,7 +4,7 @@ import os
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 
-from .models import Dataset, Location, Param, Column, Datum, DatumRaw
+from .models import Dataset, Location, Param, Column, Datum
 
 
 class TagsFieldTests(TestCase):
@@ -197,7 +197,7 @@ class DateTimeConversionTests(TestCase):
             self.assertIsNotNone(dt.tzinfo)
 
 
-class DataModelTests(TestCase):
+class DataRawModelTests(TestCase):
 
     def test_data_validation(self):
         # create dataset
@@ -215,92 +215,49 @@ class DataModelTests(TestCase):
         def now():
             return datetime.datetime.now(tz=datetime.timezone.utc)
 
-        t1 = now()
+        t1 = 1
 
-        # valid datum (utc to avoid warnings)
+        # valid datum
         valid_datum = Datum(dataset=ds, location=loc, param=param, x=t1, value='a value')
         valid_datum.full_clean()
         valid_datum.save()
 
         # blank value should be ok
-        valid_datum_2 = Datum(dataset=ds, location=loc, param=param, x=now(), value=None)
+        valid_datum_2 = Datum(dataset=ds, location=loc, param=param, x=2, value=None)
         valid_datum_2.full_clean()
         valid_datum_2.save()
+
+        # good datetime
+        valid_datum_3 = Datum(dataset=ds, location=loc, param=param, x=10, datetime=now(), value='value')
+        valid_datum_3.full_clean()
+        valid_datum_3.save()
 
         # duplicate datum
         dup_datum = Datum(dataset=ds, location=loc, param=param, x=t1, value='another value')
         self.assertRaises(ValidationError, dup_datum.full_clean)
 
         # bad dataset
-        bad_datum = Datum(dataset=None, location=loc, param=param, x=now())
+        bad_datum = Datum(dataset=None, location=loc, param=param, x=2)
         self.assertRaises(ValidationError, bad_datum.full_clean)
 
         # bad location
-        bad_datum = Datum(dataset=ds, location=None, param=param, x=now())
+        bad_datum = Datum(dataset=ds, location=None, param=param, x=3)
         self.assertRaises(ValidationError, bad_datum.full_clean)
 
         # bad param
-        bad_datum = Datum(dataset=ds, location=loc, param=None, x=now())
+        bad_datum = Datum(dataset=ds, location=loc, param=None, x=4)
         self.assertRaises(ValidationError, bad_datum.full_clean)
 
         # bad x
         bad_datum = Datum(dataset=ds, location=loc, param=param, x=None)
         self.assertRaises(ValidationError, bad_datum.full_clean)
 
-        # bad tags
-        bad_datum = Datum(dataset=ds, location=loc, param=param, x=now(), tags='{notjson]*')
-        self.assertRaises(ValidationError, bad_datum.full_clean)
-
-
-class DataRawModelTests(TestCase):
-
-    def test_data_validation(self):
-        # create dataset
-        ds = Dataset(dataset='dataset')
-        ds.save()
-
-        # valid location
-        loc = Location(dataset=ds, location='location')
-        loc.save()
-
-        # valid param
-        param = Param(dataset=ds, param='param')
-        param.save()
-
-        t1 = 'time 1'
-
-        # valid datum (utc to avoid warnings)
-        valid_datum = DatumRaw(dataset=ds, location=loc, param=param, x=t1, value='a value')
-        valid_datum.full_clean()
-        valid_datum.save()
-
-        # blank value should be ok
-        valid_datum_2 = DatumRaw(dataset=ds, location=loc, param=param, x='time 2', value=None)
-        valid_datum_2.full_clean()
-        valid_datum_2.save()
-
-        # duplicate datum
-        dup_datum = DatumRaw(dataset=ds, location=loc, param=param, x=t1, value='another value')
-        self.assertRaises(ValidationError, dup_datum.full_clean)
-
-        # bad dataset
-        bad_datum = DatumRaw(dataset=None, location=loc, param=param, x='time 2')
-        self.assertRaises(ValidationError, bad_datum.full_clean)
-
-        # bad location
-        bad_datum = DatumRaw(dataset=ds, location=None, param=param, x='time 3')
-        self.assertRaises(ValidationError, bad_datum.full_clean)
-
-        # bad param
-        bad_datum = DatumRaw(dataset=ds, location=loc, param=None, x='time 4')
-        self.assertRaises(ValidationError, bad_datum.full_clean)
-
-        # bad x
-        bad_datum = DatumRaw(dataset=ds, location=loc, param=param, x=None)
+        # good datetime
+        bad_datum = Datum(dataset=ds, location=loc, param=param, x=5, datetime='not a datetime')
         self.assertRaises(ValidationError, bad_datum.full_clean)
 
         # bad tags
-        bad_datum = DatumRaw(dataset=ds, location=loc, param=param, x='time 5', tags='{notjson]*')
+        bad_datum = Datum(dataset=ds, location=loc, param=param, x=5, tags='{notjson]*')
         self.assertRaises(ValidationError, bad_datum.full_clean)
 
 
@@ -359,4 +316,3 @@ class ImportFunctionTest(TestCase):
 
         # check for data
         self.assertEqual(len(ds.datum_set.all()), 1364)
-        self.assertEqual(len(ds.datumraw_set.all()), 0)
